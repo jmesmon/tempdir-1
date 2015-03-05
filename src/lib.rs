@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(path, fs, io)]
+#![feature(path, fs, io, os, std_misc)]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/tempdir/")]
@@ -18,6 +18,7 @@ extern crate rand;
 
 use std::env;
 use std::io::{self, Error, ErrorKind};
+use std::ffi::{AsOsStr, OsStr, OsString};
 use std::fs;
 use std::path::{self, PathBuf, AsPath};
 use rand::{thread_rng, Rng};
@@ -43,7 +44,7 @@ impl TempDir {
     /// deleted once the returned wrapper is destroyed.
     ///
     /// If no directory can be created, `Err` is returned.
-    pub fn new_in<P: AsPath + ?Sized>(tmpdir: &P, prefix: &str)
+    pub fn new_in<P: AsPath + ?Sized, N: AsOsStr + ?Sized>(tmpdir: &P, prefix: &N)
                                       -> io::Result<TempDir> {
         let storage;
         let mut tmpdir = tmpdir.as_path();
@@ -57,13 +58,17 @@ impl TempDir {
         let mut rng = thread_rng();
         for _ in 0..NUM_RETRIES {
             let suffix: String = rng.gen_ascii_chars().take(NUM_RAND_CHARS).collect();
-            let leaf = if prefix.len() > 0 {
-                format!("{}.{}", prefix, suffix)
+            let leaf = if prefix.as_os_str() != OsStr::from_str("") {
+                 let mut s = OsString::new();
+                 s.push_os_str(prefix.as_os_str());
+                 s.push_os_str(OsStr::from_str("."));
+                 s.push_os_str(suffix.as_os_str());
+                 s
             } else {
                 // If we're given an empty string for a prefix, then creating a
                 // directory starting with "." would lead to it being
                 // semi-invisible on some systems.
-                suffix
+                suffix.as_os_str().to_os_string()
             };
             let path = tmpdir.join(&leaf);
             match fs::create_dir(&path) {
